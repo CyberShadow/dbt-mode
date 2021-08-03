@@ -1,0 +1,31 @@
+<span class="function-name">{%</span> <span class="builtin">set</span> payment_methods = [<span class="string">'credit_card'</span>, <span class="string">'coupon'</span>, <span class="string">'bank_transfer'</span>, <span class="string">'gift_card'</span>] <span class="function-name">%}</span>
+<span class="keyword">with</span> orders <span class="keyword">as</span> (
+    <span class="keyword">select</span> * <span class="keyword">from</span> <span class="type">{{</span> ref(<span class="string">'stg_orders'</span>) <span class="type">}}</span>
+),
+payments <span class="keyword">as</span> (
+    <span class="keyword">select</span> * <span class="keyword">from</span> <span class="type">{{</span> ref(<span class="string">'stg_payments'</span>) <span class="type">}}</span>
+),
+order_payments <span class="keyword">as</span> (
+    <span class="keyword">select</span>
+        order_id,
+        <span class="function-name">{%</span> <span class="keyword">for</span> payment_method <span class="builtin">in</span> payment_methods <span class="function-name">-%}</span>
+        <span class="builtin">sum</span>(<span class="keyword">case when</span> payment_method = <span class="string">'</span><span class="type">{{</span> payment_method <span class="type">}}</span><span class="string">'</span> <span class="keyword">then</span> amount <span class="keyword">else</span> 0 <span class="keyword">end</span>) <span class="keyword">as</span> <span class="type">{{</span> payment_method <span class="type">}}</span>_amount,
+        <span class="function-name">{%</span> <span class="keyword">endfor</span> <span class="function-name">-%}</span>
+        <span class="builtin">sum</span>(amount) <span class="keyword">as</span> total_amount
+    <span class="keyword">from</span> payments
+    <span class="keyword">group by</span> 1
+),
+<span class="keyword">final as</span> (
+    <span class="keyword">select</span>
+        orders.order_id,
+        orders.customer_id,
+        orders.order_date,
+        orders.status,
+        <span class="function-name">{%</span> <span class="keyword">for</span> payment_method <span class="builtin">in</span> payment_methods <span class="function-name">-%}</span>
+        order_payments.<span class="type">{{</span> payment_method <span class="type">}}</span>_amount,
+        <span class="function-name">{%</span> <span class="keyword">endfor</span> <span class="function-name">-%}</span>
+        order_payments.total_amount <span class="keyword">as</span> amount
+    <span class="keyword">from</span> orders
+    <span class="keyword">left join</span> order_payments <span class="keyword">using</span> (order_id)
+)
+<span class="keyword">select</span> * <span class="keyword">from final</span>
